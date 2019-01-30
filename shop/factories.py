@@ -1,3 +1,4 @@
+from datetime import timedelta, date
 from random import randint, choice
 
 import factory.fuzzy
@@ -66,4 +67,7 @@ class OrderFactory(factory.DjangoModelFactory):
     def set_total_price(self, *args, **kwargs):
         self.total_price = self.delivery_price + \
                            OrderItem.objects.filter(order=self).aggregate(sum=Sum('price'))['sum']
-        self.save()
+
+    @factory.post_generation
+    def set_update_created_date(self, *args, **kwargs):
+        self.created = self.created - timedelta(days=randint(1, 365))

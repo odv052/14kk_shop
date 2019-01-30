@@ -1,7 +1,8 @@
-from django.db.models import F
+from django.db.models import F, Sum
+from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView
 from django_filters import rest_framework as filters
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import PageNumberPagination, CursorPagination
 from rest_framework.response import Response
 
 from shop.models import User, StatusGroup, OrderStatus, Order, OrderItem, Product, Manufacturer
@@ -26,18 +27,24 @@ from shop.models import User, StatusGroup, OrderStatus, Order, OrderItem, Produc
 from shop.serializers import OrderSerializer
 
 
+def annotate_queryset_with_slow_total_price(queryset):
+    if 'slow_total_price' not in queryset.query.annotations:
+        return queryset.annotate(slow_total_price=Sum('orderitem__price') + F('delivery_price'))
+
+
 class OrderFilter(filters.FilterSet):
     favorite_m = filters.BooleanFilter(method='favorite_m_filter')
     price_differ = filters.BooleanFilter(method='price_differ_filter')
     manufacturer = filters.NumberFilter('orderitem__product__manufacturer')
     product = filters.NumberFilter('orderitem__product')
+    fast_total_price__lte = filters.NumberFilter('total_price', lookup_expr='lte')
+    fast_total_price__gte = filters.NumberFilter('total_price', lookup_expr='gte')
+    slow_total_price__lte = filters.NumberFilter(method='slow_total_price_filter')
+    slow_total_price__gte = filters.NumberFilter(method='slow_total_price_filter')
 
     class Meta:
         model = Order
-        fields = {
-            'total_price': ['lte', 'gte'],
-            'status': ['exact'],
-        }
+        fields = ('status', )
 
     def favorite_m_filter(self, queryset, name, value):
         if value is False:
@@ -57,13 +64,19 @@ class OrderFilter(filters.FilterSet):
             ).distinct('id').values('id')
             return queryset.filter(id__in=ids)
 
+    def slow_total_price_filter(self, queryset, name, value):
+        queryset = annotate_queryset_with_slow_total_price(queryset)
+        return queryset.filter(**{name: value})
+
 
 class OrderView(ListAPIView):
     queryset = Order.objects.all()
-    filter_backends = (filters.DjangoFilterBackend,)
+    filter_backends = (filters.DjangoFilterBackend, OrderingFilter)
     filterset_class = OrderFilter
     serializer_class = OrderSerializer
-    pagination_class = PageNumberPagination
+    ordering_fields = ('created', 'total_price', 'slow_total_price')
+    ordering = ('-created',)
+    pagination_class = CursorPagination
 
     def perform_authentication(self, request):
         request.user = User.objects.get(id=request.query_params['user'])
@@ -71,14 +84,13 @@ class OrderView(ListAPIView):
     def get_queryset(self):
         queryset = super().get_queryset()
         user_allowed_statuses = OrderStatus.objects.filter(group__user=self.request.user).values('id')
-        if 'ordering' in self.request.query_params:
-            assert self.request.query_params['ordering'].strip('-') in ('created', 'total_price')
-            order = self.request.query_params['ordering']
-        else:
-            order = '-created'
+
+        if self.request.query_params.get('ordering', '').endswith('slow_total_price'):
+            queryset = annotate_queryset_with_slow_total_price(queryset)
+
         return queryset.filter(status__in=user_allowed_statuses)\
-            .order_by(order)\
-            .prefetch_related('orderitem_set', 'status')
+            .select_related('status')\
+            .prefetch_related('orderitem_set')
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
