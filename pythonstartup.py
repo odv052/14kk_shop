@@ -9,7 +9,7 @@ lines = [
     'from django.db.models.functions import CumeDist, DenseRank, FirstValue, Lag, LastValue, Lead, NthValue, Ntile, PercentRank, Rank, RowNumber',
     'from django.db.models.expressions import RawSQL',
     'from django.db import connection, connections, transaction',
-    'from t.models import H, M, L, T, S, B, A',
+    'from t.models import H, M, L, T, S, B, A, MI',
     'from shop.models import User, StatusGroup, OrderStatus, Order, OrderItem, Product, Manufacturer',
 ]
 

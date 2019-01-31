@@ -43,3 +43,9 @@ class B(models.Model):  # book
 class Im(models.Model):
     i = models.ImageField(width_field='w')
     w = models.IntegerField()
+
+
+class MI(models.Model):
+    v1 = models.IntegerField(default=0)
+    v2 = models.IntegerField(default=0)
+    v3 = models.IntegerField(default=0)

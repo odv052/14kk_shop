@@ -2,7 +2,7 @@ from django.db.models import Avg, F
 from django.test import TestCase
 from django.urls import reverse
 from shop.models import User, StatusGroup, OrderStatus, Order, OrderItem, Product, Manufacturer
-from shop.factories import ManufacturerFactory, ProductFactory, OrderFactory
+from shop.factories import ManufacturerFactory, ProductFactory, OrderFactory, OrderItemFactory
 from shop.serializers import OrderSerializer
 
 
@@ -187,6 +187,54 @@ class OrderViewTestCase(ShopAbstractTestCase):
             status__group__in=self.user.allowed_groups.values('id'),
         ).order_by('total_price').first().id
         self.assertEqual(response.data['results'][0]['id'], first_id)
+
+
+class OrderSaveModelTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        ManufacturerFactory.create()
+        ProductFactory.create()
+        OrderStatus.objects.create(name='', group=StatusGroup.objects.create(name=''))
+
+    def test_update_delivery_price(self):
+        order = OrderFactory(gen_order_items=False, set_total_price=False, delivery_price=30)
+        self.assertEqual(order.total_price, order.delivery_price)
+        price = 40
+        order.delivery_price = price
+        order.save()
+        self.assertEqual(order.total_price, 40)
+        order.refresh_from_db()
+        self.assertEqual(order.total_price, 40)
+
+
+class OrderItemSaveModelTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        ManufacturerFactory.create_batch(3)
+        ProductFactory.create_batch(3)
+        OrderStatus.objects.create(name='', group=StatusGroup.objects.create(name=''))
+        cls.order = OrderFactory.create(gen_order_items=False, set_total_price=False)
+
+    def setUp(self):
+        self.order.refresh_from_db()
+
+    def test_item_creation_update_product(self):
+        old_price = self.order.total_price
+        item = OrderItemFactory.build(order=self.order)
+        item.save()
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.total_price, old_price + item.price)
+
+    def test_item_change_price_update_product(self):
+        old_price = self.order.total_price
+        item = OrderItemFactory.build(order=self.order)
+        item.save()
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.total_price, old_price + item.price)
+        item.price += 10
+        item.save()
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.total_price, old_price + item.price)
 
 
 class OrderSerializerTestCase(ShopAbstractTestCase):
