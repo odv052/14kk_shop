@@ -1,4 +1,4 @@
-from django.db.models import F, Sum
+from django.db.models import F, Sum, Q
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView
 from django_filters import rest_framework as filters
@@ -59,8 +59,8 @@ class OrderFilter(filters.FilterSet):
         if value is False:
             return queryset
         else:
-            ids = queryset.order_by('id').exclude(
-                orderitem__price=F('orderitem__product__price')
+            ids = queryset.order_by('id').filter(
+                ~Q(orderitem__price=F('orderitem__product__price'))
             ).distinct('id').values('id')
             return queryset.filter(id__in=ids)
 
@@ -77,6 +77,7 @@ class OrderView(ListAPIView):
     ordering_fields = ('created', 'total_price', 'slow_total_price')
     ordering = ('-created',)
     pagination_class = CursorPagination
+    pagination_class.page_size_query_param = 'page_size'
 
     def perform_authentication(self, request):
         request.user = User.objects.get(id=request.query_params['user'])

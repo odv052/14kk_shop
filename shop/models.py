@@ -31,7 +31,7 @@ class Order(models.Model):
 
     def save(self, *args, **kwargs):
         # update total_price by changing delivery_price
-        if self.pk:
+        if not self._state.adding:
             if isinstance(self.total_price, Combinable):
                 self.total_price = self.total_price - F('delivery_price') + self.delivery_price
             else:
@@ -53,7 +53,7 @@ class OrderItem(models.Model):
         unique_together = ('order', 'product')
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        if not self._state.adding:
             with transaction.atomic():
                 with connection.cursor() as cursor:
                     cursor.execute(

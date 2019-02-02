@@ -1,6 +1,8 @@
 from django.db.models import Avg, F
 from django.test import TestCase
 from django.urls import reverse
+from rest_framework import status
+
 from shop.models import User, StatusGroup, OrderStatus, Order, OrderItem, Product, Manufacturer
 from shop.factories import ManufacturerFactory, ProductFactory, OrderFactory, OrderItemFactory
 from shop.serializers import OrderSerializer
@@ -28,6 +30,18 @@ class ShopAbstractTestCase(TestCase):
 
 
 class OrderViewTestCase(ShopAbstractTestCase):
+    def test_pagination(self):
+        OrderFactory.create_batch(30)
+        response = self.client.get(self.url, {
+            'user': self.user.id,
+            'page_size': 10,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response2 = self.client.get(response.data['next'])
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        response3 = self.client.get(response2.data['previous'])
+        self.assertEqual(response3.status_code, status.HTTP_200_OK)
+
     def test_favorite_m_filter(self):
         response = self.client.get(self.url, {
             'user': self.user.id,
@@ -197,7 +211,7 @@ class OrderSaveModelTestCase(TestCase):
         OrderStatus.objects.create(name='', group=StatusGroup.objects.create(name=''))
 
     def test_update_delivery_price(self):
-        order = OrderFactory(gen_order_items=False, set_total_price=False, delivery_price=30)
+        order = OrderFactory(gen_order_items=False, delivery_price=30)
         self.assertEqual(order.total_price, order.delivery_price)
         price = 40
         order.delivery_price = price
@@ -213,7 +227,7 @@ class OrderItemSaveModelTestCase(TestCase):
         ManufacturerFactory.create_batch(3)
         ProductFactory.create_batch(3)
         OrderStatus.objects.create(name='', group=StatusGroup.objects.create(name=''))
-        cls.order = OrderFactory.create(gen_order_items=False, set_total_price=False)
+        cls.order = OrderFactory.create(gen_order_items=False)
 
     def setUp(self):
         self.order.refresh_from_db()

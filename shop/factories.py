@@ -60,17 +60,10 @@ class OrderFactory(factory.DjangoModelFactory):
 
     @factory.post_generation
     def gen_order_items(self, create, extracted=True, **kwargs):
-        if not extracted:
+        if extracted is False:
             return
         for _ in range(randint(3, 10)):
             OrderItemFactory.build(order=self).save()
-
-    @factory.post_generation
-    def set_total_price(self, create, extracted=True, **kwargs):
-        if not extracted:
-            return
-        self.total_price = self.delivery_price + \
-                           OrderItem.objects.filter(order=self).aggregate(sum=Sum('price'))['sum']
 
     @factory.post_generation
     def set_update_created_date(self, create, extracted, **kwargs):
